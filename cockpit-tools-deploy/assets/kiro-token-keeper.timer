@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Kiro token keeper every 40 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=40min
+Unit=kiro-token-keeper.service
+
+[Install]
+WantedBy=timers.target

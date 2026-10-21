@@ -1,0 +1,15 @@
+[Unit]
+Description=Cockpit Tools (Tauri account manager, home-dir install)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment=COCKPIT_WAIT_DISPLAY=1
+ExecStart=/home/hatch/workspace/cockpit-tools/run.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

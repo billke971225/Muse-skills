@@ -1,0 +1,8 @@
+[Unit]
+Description=Kiro IdC token keeper (JSON refresh, syncs Cockpit store)
+After=network.target clean-node.service cockpit-tools.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/hatch/workspace/kiro-login/kiro-token-keeper.sh cockpit-builderid
+ExecStart=/home/hatch/workspace/kiro-login/kiro-token-keeper.sh kiro-student
