@@ -1,0 +1,8 @@
+interface:
+  display_name: "Visual Debug"
+  short_description: "Diagnose an existing implementation against reference evidence with visual and transition diffs."
+  brand_color: "#10A37F"
+  default_prompt: "Use visual-debug to diagnose why this existing implementation differs from its reference evidence and return concrete repair guidance."
+
+policy:
+  allow_implicit_invocation: true
