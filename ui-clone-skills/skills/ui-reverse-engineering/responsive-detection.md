@@ -1,0 +1,534 @@
+# Responsive Detection — Step 4
+
+> All `agent-browser eval` calls must use IIFE: `(() => { ... })()` — no top-level return.
+
+## Overview
+
+Detect real breakpoints by sweeping viewport width and measuring layout changes — never rely on hardcoded 375/768/1440.
+
+> **Security note:** the `node -e` commands parse JSON produced by `agent-browser eval` from an untrusted site. Never pass unsanitized external strings to `node -e` via shell interpolation — always read saved JSON files via `require('fs').readFileSync`.
+
+Desktop-first verification still needs responsive source analysis before generation: collect authored queries, fluid sizing, container ancestry, and layout/visibility changes across bands. These probes establish implementation inputs, not a full multi-viewport pixel sweep; preserve discovered variants even when their verification is deferred until after desktop.
+
+## Step 4-A: Extract CSS `@media` rules (hints)
+
+CSS media queries are hints, not ground truth — the layout may break at widths no `@media` rule covers.
+
+```bash
+agent-browser --session <s> eval "
+(() => {
+  const breakpoints = [];
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) {
+        if (rule instanceof CSSMediaRule) breakpoints.push(rule.conditionText);
+      }
+    } catch(e) {}
+  }
+  return JSON.stringify([...new Set(breakpoints)], null, 2);
+})()"
+```
+
+Save the result — these are candidate breakpoints to verify against the sweep.
+
+## Step 4-B: Viewport Sweep — Auto-Detect Breakpoints
+
+Resize the actual viewport and measure layout at each width — JS width overrides and iframe tricks do not trigger real media queries. Two passes: coarse → fine.
+
+### Pass 1: Coarse sweep (1440 → 320, step 40px)
+
+```bash
+mkdir -p tmp/ref/<component>/responsive
+
+# Shared measure-function definition. Reused for initial register + every
+# survival re-register below. Adapt the `selectors` list to your component.
+MEASURE_EVAL='(() => {
+  window.__responsiveMeasure = function() {
+    const selectors = ["body", "nav", "header", "main", "footer", "section", ".hero", ".grid", ".container", "[class*=nav]", "[class*=header]", "[class*=grid]"];
+    const props = ["display", "flexDirection", "gridTemplateColumns", "fontSize", "padding", "gap", "visibility", "position"];
+    const result = {};
+    selectors.forEach(sel => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const s = getComputedStyle(el);
+      const vals = {};
+      props.forEach(p => vals[p] = s[p]);
+      vals._w = el.offsetWidth;
+      vals._h = el.offsetHeight;
+      vals._visible = el.offsetWidth > 0 && el.offsetHeight > 0;
+      result[sel] = vals;
+    });
+    return result;
+  };
+  return "ready";
+})()'
+
+# Helper: ensure measure function is registered (re-register if page reloaded).
+ensure_measure() {
+  local check
+  check=$(agent-browser --session <s> eval "(() => typeof window.__responsiveMeasure)()")
+  if [ "$check" != "function" ]; then
+    agent-browser --session <s> eval "$MEASURE_EVAL"
+  fi
+}
+
+# Register measure function for the first time
+agent-browser --session <s> eval "$MEASURE_EVAL"
+
+# Coarse sweep (1440 → 320 in 40px steps ≈ 29 iterations, ~5s total)
+RESULTS="["
+FIRST=true
+for W in $(seq 1440 -40 320); do
+  agent-browser --session <s> set viewport $W 900
+  agent-browser --session <s> wait 80
+  ensure_measure
+  M=$(agent-browser --session <s> eval "(() => JSON.stringify({ width: window.innerWidth, layout: window.__responsiveMeasure() }))()")
+  if [ "$FIRST" = true ]; then FIRST=false; else RESULTS="$RESULTS,"; fi
+  RESULTS="$RESULTS$M"
+done
+RESULTS="$RESULTS]"
+echo "$RESULTS" > tmp/ref/<component>/responsive/sweep-coarse.json
+```
+
+### Detect coarse change zones
+
+```bash
+node -e "
+const data = JSON.parse(require('fs').readFileSync('./tmp/ref/<component>/responsive/sweep-coarse.json', 'utf8'));
+const zones = [];
+for (let i = 1; i < data.length; i++) {
+  const prev = data[i-1], curr = data[i];
+  const changes = [];
+  for (const sel of Object.keys(curr.layout || {})) {
+    if (!prev.layout?.[sel]) continue;
+    for (const prop of Object.keys(curr.layout[sel])) {
+      if (prop.startsWith('_')) continue;
+      if (curr.layout[sel][prop] !== prev.layout[sel][prop]) {
+        changes.push({ selector: sel, property: prop, from: prev.layout[sel][prop], to: curr.layout[sel][prop] });
+      }
+    }
+  }
+  if (changes.length) zones.push({ lo: curr.width, hi: prev.width, changes });
+}
+console.log(JSON.stringify(zones, null, 2));
+" > tmp/ref/<component>/responsive/change-zones.json
+```
+
+### Pass 2: Fine sweep around change zones (step 5px)
+
+```bash
+# Generate fine sweep widths from change zones
+node -e "
+const z = JSON.parse(require('fs').readFileSync('./tmp/ref/<component>/responsive/change-zones.json', 'utf8'));
+const widths = new Set();
+z.forEach(x => {
+  for (let w = x.hi + 10; w >= Math.max(x.lo - 10, 320); w -= 5) widths.add(w);
+});
+console.log([...widths].sort((a,b) => b - a).join('\n'));
+" > tmp/ref/<component>/responsive/fine-widths.txt
+
+# Reuse $MEASURE_EVAL and ensure_measure from Pass 1 (same shell session).
+ensure_measure
+
+# Sweep those widths
+RESULTS="["
+FIRST=true
+while read W; do
+  agent-browser --session <s> set viewport $W 900
+  agent-browser --session <s> wait 80
+  ensure_measure
+  M=$(agent-browser --session <s> eval "(() => JSON.stringify({ width: window.innerWidth, layout: window.__responsiveMeasure() }))()")
+  if [ "$FIRST" = true ]; then FIRST=false; else RESULTS="$RESULTS,"; fi
+  RESULTS="$RESULTS$M"
+done < tmp/ref/<component>/responsive/fine-widths.txt
+RESULTS="$RESULTS]"
+echo "$RESULTS" > tmp/ref/<component>/responsive/sweep-fine.json
+```
+
+## Step 4-C: Extract Breakpoints
+
+Parse the fine sweep data to find exact change widths:
+
+```bash
+node -e "
+const fs = require('fs');
+const coarse = JSON.parse(fs.readFileSync('./tmp/ref/<component>/responsive/sweep-coarse.json', 'utf8'));
+const fine = JSON.parse(fs.readFileSync('./tmp/ref/<component>/responsive/sweep-fine.json', 'utf8'));
+const all = [...coarse, ...fine].sort((a,b) => b.width - a.width);
+
+// Deduplicate by width
+const seen = new Set();
+const data = all.filter(d => { if (seen.has(d.width)) return false; seen.add(d.width); return true; });
+
+const breakpoints = [];
+for (let i = 1; i < data.length; i++) {
+  const prev = data[i-1], curr = data[i];
+  const changes = [];
+  for (const sel of Object.keys(curr.layout || {})) {
+    if (!prev.layout?.[sel]) continue;
+    for (const prop of Object.keys(curr.layout[sel])) {
+      if (prop.startsWith('_')) continue;
+      if (curr.layout[sel][prop] !== prev.layout[sel][prop]) {
+        changes.push({ selector: sel, property: prop, from: prev.layout[sel][prop], to: curr.layout[sel][prop] });
+      }
+    }
+  }
+  if (changes.length) breakpoints.push({ width: curr.width, prevWidth: prev.width, changes });
+}
+
+// Cluster nearby breakpoints (within 10px) into single breakpoint
+const clustered = [];
+for (const bp of breakpoints) {
+  const last = clustered[clustered.length - 1];
+  if (last && Math.abs(last.width - bp.width) <= 10) {
+    last.changes.push(...bp.changes);
+    last.width = Math.min(last.width, bp.width);
+  } else {
+    clustered.push({ ...bp, changes: [...bp.changes] });
+  }
+}
+
+console.log(JSON.stringify(clustered, null, 2));
+" > tmp/ref/<component>/responsive/detected-breakpoints.json
+```
+
+## Step 4-C1b: Mobile-only sibling section detection (MANDATORY for Webflow / breakpoint-swap sites)
+
+⛔ **Skip this and the entire mobile experience disappears.** Webflow (and many bespoke designs) hide a section at `<479px` and show a separate `.<name>-mobile` element with a different DOM tree (different layout, sometimes different copy, often hand-broken via `<br>`). Cloning only the desktop section renders an empty mobile section.
+
+**Detection eval — run at the smallest target viewport (typically 375px), against ref:**
+
+```bash
+agent-browser --session <s> set viewport 375 812
+agent-browser --session <s> open <ref-url>
+agent-browser --session <s> wait 3000
+agent-browser --session <s> eval "(() => {
+  const hidden = [...document.querySelectorAll('section, div, header, footer, main, aside')]
+    .filter(el => el.className && getComputedStyle(el).display === 'none');
+  const mobiles = [...document.querySelectorAll('[class*=\"-mobile\"], [class*=\"mob\"]')]
+    .filter(el => el.className && getComputedStyle(el).display !== 'none')
+    .map(el => ({ cls: el.className, w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height }));
+  return { hiddenAtMobile: hidden.map(el => el.className), mobileSiblings: mobiles };
+})()" > tmp/ref/<c>/responsive/mobile-swap.json
+```
+
+**Required impl rule:** every desktop section that is `display: none` at the smallest breakpoint MUST have a paired `*-mobile` sibling in the impl; both stay in the JSX with CSS gating visibility per breakpoint; the mobile section is a sibling, NOT a child (nesting it under the hidden desktop section cascades `display: none`); return both via `<>...</>` — never wrap in a single `<section>` (cannot legally nest, and the parent's display rule kills the mobile child).
+
+**Common pitfall — extracting body text:** mobile-only sections hand-break copy with `<br>`. `el.textContent` flattens these — you lose line breaks and can concatenate adjacent text nodes without whitespace ("idea" + "scurated" → "ideascurated"). **Always extract via `el.childNodes`** and emit JSX that preserves the `<br>` boundaries verbatim:
+
+```js
+[...p.childNodes].map(n => n.nodeType === 3 ? { text: n.textContent } : { br: true })
+```
+
+Pixel-match means matching ref's hand-breaks (and ref typos) verbatim, not "fixing" them.
+
+## Step 4-C2: Multi-Viewport Element Sizing Comparison (MANDATORY)
+
+⛔ **This step recovers original CSS expressions (`calc()`, `vw`, `%`) from computed px values.** `getComputedStyle` returns resolved px — without it, `width: calc(100vw - 64px)` becomes `width: 1376px` and breaks at every other viewport.
+
+> **Deterministic path (preferred):** `bash "$PLUGIN_ROOT/scripts/extract/responsive-sweep.sh" <ref_url> "$(pwd)/tmp/ref/<component>" --session <s>` opens the ref at 768/1280/1440, samples the tracked elements at each width, classifies each property (`_responsive_classify.py`), and writes the real selector-keyed `responsive/sizing-expressions.json` (plus `responsive/sizing-<vp>.json` and `responsive/sizing-sweep.json`). It satisfies the pre-generate responsive gate (not the single-viewport finalizer sentinel). Run the manual steps below only to debug or extend the selector set.
+
+Measure ALL key elements at exactly 3 viewport widths: **768, 1280, 1440**.
+
+```bash
+agent-browser --session <s> eval "
+(() => {
+  window.__sizingMeasure = function() {
+    const selectors = [
+      // Layout containers
+      'body', 'main', 'header', 'footer', 'nav',
+      // Sections
+      ...Array.from(document.querySelectorAll('section')).map((el, i) => {
+        const cn = typeof el.className === 'string' ? el.className : '';
+        return el.id ? '#' + el.id : 'section' + (cn.trim().split(' ')[0] ? '.' + cn.trim().split(' ')[0] : ':nth-of-type(' + (i+1) + ')');
+      }),
+      // Key layout elements
+      '.container', '.wrapper', '.hero', '.grid',
+      '[class*=container]', '[class*=wrapper]', '[class*=inner]',
+    ];
+
+    const results = {};
+    const seen = new Set();
+    selectors.forEach(sel => {
+      if (seen.has(sel)) return;
+      seen.add(sel);
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const s = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      results[sel] = {
+        width: r.width,
+        height: r.height,
+        maxWidth: s.maxWidth,
+        minWidth: s.minWidth,
+        paddingLeft: parseFloat(s.paddingLeft) || 0,
+        paddingRight: parseFloat(s.paddingRight) || 0,
+        marginLeft: s.marginLeft,
+        marginRight: s.marginRight,
+        gap: s.gap,
+        fontSize: parseFloat(s.fontSize),
+        lineHeight: s.lineHeight,
+      };
+    });
+    return results;
+  };
+  return 'sizing measure ready';
+})()
+"
+
+# Measure at 3 viewports
+for VP in 768 1280 1440; do
+  agent-browser --session <s> set viewport $VP 900
+  agent-browser --session <s> wait 200
+  CHECK=$(agent-browser --session <s> eval "(() => typeof window.__sizingMeasure)()")
+  if [ "$CHECK" != "function" ]; then
+    # Re-register (paste above eval)
+    agent-browser --session <s> eval "(() => { window.__sizingMeasure = function() { /* ... same as above ... */ }; return 'ready'; })()"
+  fi
+  agent-browser --session <s> eval "(() => JSON.stringify({ viewport: window.innerWidth, elements: window.__sizingMeasure() }, null, 2))()" \
+    > tmp/ref/<component>/responsive/sizing-$VP.json
+done
+```
+
+### Analyze sizing expressions
+
+```bash
+node -e "
+const fs = require('fs');
+const viewports = [768, 1280, 1440];
+const data = viewports.map(vp => {
+  const f = './tmp/ref/<component>/responsive/sizing-' + vp + '.json';
+  return JSON.parse(fs.readFileSync(f, 'utf8'));
+});
+
+const expressions = {};
+const allSelectors = new Set();
+data.forEach(d => Object.keys(d.elements).forEach(s => allSelectors.add(s)));
+
+for (const sel of allSelectors) {
+  const vals = data.map((d, i) => ({
+    vp: viewports[i],
+    w: d.elements[sel]?.width,
+    h: d.elements[sel]?.height,
+    pl: d.elements[sel]?.paddingLeft,
+    pr: d.elements[sel]?.paddingRight,
+    fs: d.elements[sel]?.fontSize,
+  })).filter(v => v.w != null);
+  if (vals.length < 2) continue;
+
+  const analyze = (prop) => {
+    const values = vals.map(v => ({ vp: v.vp, val: v[prop] })).filter(v => v.val != null);
+    if (values.length < 2) return null;
+
+    const allSame = values.every(v => Math.abs(v.val - values[0].val) < 1);
+    if (allSame) return { type: 'fixed-px', value: Math.round(values[0].val) + 'px' };
+
+    // Check if value = viewport - constant (calc pattern)
+    const offsets = values.map(v => v.vp - v.val);
+    const offsetSame = offsets.every(o => Math.abs(o - offsets[0]) < 3);
+    if (offsetSame) return { type: 'calc', value: 'calc(100vw - ' + Math.round(offsets[0]) + 'px)', raw: values };
+
+    // Check if value = percentage of viewport
+    const pcts = values.map(v => (v.val / v.vp) * 100);
+    const pctSame = pcts.every(p => Math.abs(p - pcts[0]) < 1.5);
+    if (pctSame) return { type: 'vw', value: Math.round(pcts[0] * 10) / 10 + 'vw', raw: values };
+
+    // Check linear relationship (slope + intercept)
+    if (values.length >= 2) {
+      const x1 = values[0].vp, y1 = values[0].val;
+      const x2 = values[values.length-1].vp, y2 = values[values.length-1].val;
+      const slope = (y2 - y1) / (x2 - x1);
+      const intercept = y1 - slope * x1;
+      const fits = values.every(v => Math.abs(v.val - (slope * v.vp + intercept)) < 3);
+      if (fits && Math.abs(slope) > 0.05) {
+        return { type: 'linear', value: 'calc(' + (Math.round(slope * 1000) / 10) + 'vw + ' + Math.round(intercept) + 'px)', raw: values };
+      }
+    }
+
+    // Breakpoint jump — values differ but no linear pattern
+    return { type: 'breakpoint-jump', values: values.map(v => ({ vp: v.vp, val: Math.round(v.val) + 'px' })) };
+  };
+
+  const result = {};
+  for (const prop of ['w', 'h', 'pl', 'pr', 'fs']) {
+    const analysis = analyze(prop);
+    if (analysis) result[prop] = analysis;
+  }
+  if (Object.keys(result).length > 0) expressions[sel] = result;
+}
+
+console.log(JSON.stringify(expressions, null, 2));
+" > tmp/ref/<component>/responsive/sizing-expressions.json
+```
+
+**Save output to** `tmp/ref/<component>/responsive/sizing-expressions.json`
+
+**How generation must use this:**
+
+| `type` | Action |
+|---|---|
+| `fixed-px` | Safe to hardcode px value |
+| `calc` | Use the `calc()` expression directly (e.g., `w-[calc(100vw-64px)]`) |
+| `vw` | Use viewport units (e.g., `w-[83.3vw]`) |
+| `linear` | Use the generated `calc()` expression |
+| `breakpoint-jump` | Use Tailwind responsive prefixes (e.g., `w-full md:w-[704px] lg:w-[1376px]`) |
+
+⛔ **Gate:** If `sizing-expressions.json` does not exist, `python -m ui_clone.gate <ref-dir> pre-generate` MUST fail.
+
+## Step 4-C2b: Boundary collision sweep (impl mixes Tailwind + project `@media` rules)
+
+A project rule keyed off `@media (max-width: 768px)` plus a Tailwind `md:` utility (`min-width: 768px`) both apply at exactly 768 — a single-pixel collision where layout overflows (`diagnosis.md` → Root Cause J). The deterministic producer is `breakpoint-collision-check.sh` at pipeline Step 8-pre-bound (`boundary` gate, `responsive/boundary-collisions.json` must be `[]`). Read `boundary-collision-sweep.md` only when the impl mixes Tailwind responsive utilities with project-scoped `@media (max-width: <bp>px)` rules and you need the manual ±1 sweep to debug or extend it.
+
+## Step 4-D: Capture Per-Breakpoint Screenshots + Styles
+
+For each detected breakpoint, capture a screenshot and extract computed styles. Replace `<bp-width>` for each breakpoint found:
+
+```bash
+agent-browser --session <s> set viewport <bp-width> 900
+agent-browser --session <s> wait 300
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/ref-<bp-width>.png
+agent-browser --session <s> eval "
+(() => {
+  // Adapt selectors to match your target component
+  const selectors = ['body', 'nav', 'header', 'main', 'section', '.hero', '.grid', '.container'];
+  const props = [
+    'display', 'flexDirection', 'alignItems', 'justifyContent', 'gap',
+    'gridTemplateColumns', 'gridTemplateRows',
+    'width', 'height', 'maxWidth', 'minHeight',
+    'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+    'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+    'color', 'backgroundColor',
+    'borderRadius', 'boxShadow',
+    'position', 'top', 'right', 'bottom', 'left',
+  ];
+  const result = {};
+  selectors.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    const s = getComputedStyle(el);
+    result[sel] = {};
+    const positionProps = new Set(['top','right','bottom','left','marginTop','marginRight','marginBottom','marginLeft','paddingTop','paddingRight','paddingBottom','paddingLeft']);
+    props.forEach(p => {
+      const v = s[p];
+      if (v && (v !== '0px' || positionProps.has(p)) && (v !== 'none' || p === 'display')) result[sel][p] = v;
+    });
+  });
+  return JSON.stringify({ viewport: window.innerWidth, styles: result }, null, 2);
+})()"
+```
+
+Save per-breakpoint styles to `tmp/ref/<component>/responsive/styles-<bp-width>.json`.
+
+## Step 4-E: Record Resize Video (optional)
+
+Record a video while stepping the viewport down to review layout transitions:
+
+```bash
+agent-browser --session <s> set viewport 1440 900
+agent-browser --session <s> record start tmp/ref/<component>/responsive/resize-sweep.webm
+
+# Step viewport down in 20px increments
+for W in $(seq 1440 -20 320); do
+  agent-browser --session <s> set viewport $W 900
+  agent-browser --session <s> wait 100
+done
+
+agent-browser --session <s> record stop
+
+# Extract frames for review (10fps is sufficient for resize review)
+mkdir -p tmp/ref/<component>/responsive/sweep-frames
+ffmpeg -i tmp/ref/<component>/responsive/resize-sweep.webm -vf fps=10 tmp/ref/<component>/responsive/sweep-frames/frame-%04d.png -y
+```
+
+## Responsive Verification (Phase A-R / B-R / C-R)
+
+### A-R: Reference responsive screenshots
+
+**Already captured in Step 4-D** (`ref-<bp-width>.png` per detected breakpoint). Add the extremes if missing:
+
+```bash
+# Only if not already captured in Step 4-D:
+agent-browser --session <s> set viewport 320 900
+agent-browser --session <s> eval "(() => window.scrollTo(0, 0))()"
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/ref-320.png
+agent-browser --session <s> set viewport 1440 900
+agent-browser --session <s> eval "(() => window.scrollTo(0, 0))()"
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/ref-1440.png
+```
+
+### B-R: Implementation responsive screenshots
+
+Same breakpoints, on localhost:
+
+```bash
+agent-browser --session <s> open http://localhost:<port>
+
+# For each detected breakpoint width:
+agent-browser --session <s> set viewport <bp-width> 900
+agent-browser --session <s> eval "(() => window.scrollTo(0, 0))()"
+agent-browser --session <s> wait 300
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/impl-<bp-width>.png
+
+# Extremes
+agent-browser --session <s> set viewport 320 900
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/impl-320.png
+agent-browser --session <s> set viewport 1440 900
+agent-browser --session <s> screenshot tmp/ref/<component>/responsive/impl-1440.png
+```
+
+### C-R: Responsive comparison table
+
+```
+| Breakpoint | Width | Ref                    | Impl                    | Match? | Issue |
+|------------|-------|------------------------|-------------------------|--------|-------|
+| min        | 320   | responsive/ref-320     | responsive/impl-320     | ✅/❌  |       |
+| bp-1       | <w1>  | responsive/ref-<w1>    | responsive/impl-<w1>    | ✅/❌  |       |
+| bp-2       | <w2>  | responsive/ref-<w2>    | responsive/impl-<w2>    | ✅/❌  |       |
+| ...        | ...   | ...                    | ...                     | ✅/❌  |       |
+| max        | 1440  | responsive/ref-1440    | responsive/impl-1440    | ✅/❌  |       |
+```
+
+ALL rows must be ✅. For each ❌: identify the differing layout property at that width → fix → re-capture impl only.
+
+## Output
+
+Save to `tmp/ref/<component>/responsive/detected-breakpoints.json`:
+
+```json
+{
+  "cssMediaQueries": ["(max-width: 768px)", "(max-width: 1024px)"],
+  "detectedBreakpoints": [
+    {
+      "width": 768,
+      "changes": [
+        { "selector": ".grid", "property": "gridTemplateColumns", "from": "repeat(3, 1fr)", "to": "repeat(2, 1fr)" }
+      ]
+    },
+    {
+      "width": 640,
+      "changes": [
+        { "selector": "nav", "property": "display", "from": "flex", "to": "none" },
+        { "selector": ".grid", "property": "gridTemplateColumns", "from": "repeat(2, 1fr)", "to": "1fr" }
+      ]
+    }
+  ],
+  "tailwindBreakpoints": {
+    "sm": 640,
+    "md": 768,
+    "lg": 1024
+  }
+}
+```
+
+`tailwindBreakpoints` maps detected breakpoints to the nearest Tailwind breakpoint for code generation.
+
+## Fallback
+
+If the viewport sweep fails (CORS, bot detection, no responsive CSS), fall back to standard breakpoints and note it in `extracted.json`:
+
+| Label   | Width | Height |
+|---------|-------|--------|
+| mobile  | 375   | 812    |
+| tablet  | 768   | 1024   |
+| desktop | 1440  | 900    |

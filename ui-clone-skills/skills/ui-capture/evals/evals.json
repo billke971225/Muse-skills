@@ -1,0 +1,352 @@
+{
+  "skill_name": "ui-capture",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "capture baseline screenshots from https://example.com",
+      "expected_output": "tmp/ref/capture/ directory with scrolled viewport screenshots in static/ref/ and scroll video in scroll-video/ref/, validated as non-blank and non-bot-detection.",
+      "files": [],
+      "expectations": [
+        "Creates tmp/ref/capture/ directory structure",
+        "Opens site with agent-browser",
+        "Sets viewport to 1440x900",
+        "Takes scrolled viewport screenshot(s) to static/ref/",
+        "Records full scroll video to scroll-video/ref/",
+        "Validates screenshots are not blank or bot-detection pages"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "capture https://playbook.ebay.com — detect all scroll-triggered animations",
+      "expected_output": "regions.json with scroll array listing detected elements, their from/to scrollY ranges, and changedProperties. Videos recorded for each scroll region.",
+      "files": [],
+      "expectations": [
+        "Scrolls through page measuring computed style changes",
+        "Identifies elements where transform/opacity/clipPath changes on scroll",
+        "Records scroll regions with from/to scrollY ranges in regions.json",
+        "Captures video for each detected scroll transition region",
+        "Filters out duplicates and elements < 50px"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "capture hover effects from a site with interactive buttons and cards",
+      "expected_output": "regions.json with hover array listing verified hover elements. Idle and active PNG clips captured for each element. Total regions ≤ 20.",
+      "files": [],
+      "expectations": [
+        "Detects elements with transitionDuration !== '0s'",
+        "Verifies hover actually changes computed styles before including",
+        "Groups sibling elements with same transition under parent",
+        "Captures idle and active PNG clips for each verified element",
+        "Keeps total regions ≤ 20"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "capture cursor-reactive parallax effect with raster-path sweep",
+      "expected_output": "transitions/ref/mousemove-<name>.mp4 — single raster-path video sweeping all grid points. regions.json has mousemove entry with triggerType 'mousemove'.",
+      "files": [],
+      "expectations": [
+        "Detects mousemove listeners or cursor-reactive class patterns",
+        "Tags region with triggerType 'mousemove' in regions.json",
+        "Captures single raster-path video sweeping all 100 grid points",
+        "Saves video to transitions/ref/mousemove-<name>.mp4",
+        "No separate matrix PNG images needed — video is the only artifact"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "capture carousel auto-rotation from a site with a slideshow",
+      "expected_output": "regions.json with timer array including interval_ms estimate. Video recorded covering 2-3 full cycles.",
+      "files": [],
+      "expectations": [
+        "Detects carousel/slider/swiper elements",
+        "Records video waiting for 2-3 full cycles",
+        "Saves interval_ms estimate in regions.json"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "compare https://example.com vs http://localhost:3000 — generate comparison page",
+      "expected_output": "Phase 4A Phase D (D1 clip diffs + D2 computed-diff.sh) completed with no mismatch before compare.html generated. compare.html includes the Phase D table at top, followed by side-by-side paired videos with synchronized playback. URL presented to user.",
+      "files": [],
+      "expectations": [
+        "Captures impl with identical parameters as ref",
+        "Phase 4A: visual-debug/verification.md Phase D (D1+D2) executed for each major section before generating compare.html",
+        "Every D1 clip pair passes and computed-diff.sh exits 0 for every selector; no page-level pixel-perfect-diff.json is written",
+        "compare.html includes the Phase D table (clip AE/SSIM rows and computed-diff.sh rows) embedded at top (before video sections)",
+        "Diff table shows element, property, ref value, impl value, status columns",
+        "Generates compare.html with side-by-side layout",
+        "Includes paired video sync (play one, other follows)",
+        "Includes paired raster-path videos for cursor-reactive elements (no PNG matrix grids)",
+        "Includes Play All button",
+        "Serves comparison page and presents URL to user"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "capture https://cloudflare-protected-site.com",
+      "expected_output": "Bot detection detected on first screenshot, retried up to 2 times with increased wait, then reported to user with options: retry, manual capture, or provide screenshots.",
+      "files": [],
+      "expectations": [
+        "Detects bot-detection page on first screenshot (Cloudflare challenge)",
+        "Retries up to 2 times with increased wait",
+        "On 3rd failure, reports to user with options: retry, manual capture, or provide screenshots",
+        "Does not crash or hang indefinitely"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "capture a SPA where content only appears after scrolling",
+      "expected_output": "All lazy-loaded sections captured accurately. Each scroll position waited for content to settle (800ms+) before screenshot.",
+      "files": [],
+      "expectations": [
+        "Scrolls to each position before capturing",
+        "Waits for content to appear (800ms+ settle time)",
+        "Retries with longer wait if screenshot shows empty content",
+        "Accurately captures all lazy-loaded sections"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "capture all transitions and save to regions.json",
+      "expected_output": "regions.json with url, capturedAt, page dimensions, and fully populated scroll/hover/mousemove/timer arrays. Each hover region includes triggerType field.",
+      "files": [],
+      "expectations": [
+        "regions.json has url, capturedAt, page dimensions",
+        "scroll array has name, from, to, selector, changedProperties, triggerType ('scroll-driven')",
+        "hover array has name, selector, y, bounds, transitionDuration, triggerType",
+        "triggerType values are one of: css-hover, js-class, intersection, scroll-driven, mousemove, auto-timer",
+        "js-class regions include triggerClass field",
+        "mousemove array has name, selector, y, bounds, triggerType ('mousemove')",
+        "timer array has name, selector, y, bounds, triggerType ('auto-timer'), interval_ms"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "capture a site with 50+ nav links that all have the same hover transition",
+      "expected_output": "regions.json with deduplicated hover regions — siblings grouped under parent, total ≤ 20. No redundant individual-link entries.",
+      "files": [],
+      "expectations": [
+        "Groups sibling elements under parent instead of listing all 50",
+        "Applies size threshold (> 50px)",
+        "Verifies actual style change before including",
+        "Total regions ≤ 20",
+        "Prioritizes unique effects over repeated ones"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "capture a scroll transition for an element located 5000px down the page",
+      "expected_output": "Scroll video correctly shows the element at the target scroll position (not stuck at y=0). record start followed by scroll eval and viewport reset.",
+      "files": [],
+      "expectations": [
+        "Issues scroll eval AFTER record start (not before)",
+        "Calls set viewport 1440 900 after record start",
+        "Waits 3000ms for page to reload in recording context",
+        "Scrolls to target position with scrollIntoView or scrollTo eval",
+        "Takes verify screenshot before recording to confirm correct position",
+        "Crops using timestamp-based crop point (SCROLL_T), not stdev threshold — stdev only removes blank frames but leaves hero footage for deep sections"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "capture a card that uses a JS class toggle for its hover effect",
+      "expected_output": "Idle and active PNG clips show the card state toggled with the correct CSS class via eval, not by a simple hover command. regions.json has triggerType 'js-class' with triggerClass field.",
+      "files": [],
+      "expectations": [
+        "Detects that the effect is JS-driven (class toggle), not CSS :hover",
+        "Tags region with triggerType 'js-class' and triggerClass in regions.json",
+        "Activates effect by adding the class via eval (not agent-browser hover)",
+        "Captures idle and active PNG clips around class add/remove",
+        "Active clip shows the intended state, not a blank or wrong element"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "capture a section that fades in when scrolled into view (IntersectionObserver-triggered animation)",
+      "expected_output": "Idle and active PNG clips show the element before and after it enters the viewport. regions.json has triggerType 'intersection'. Activation uses smooth scroll into view, not agent-browser hover.",
+      "files": [],
+      "expectations": [
+        "Detects intersection trigger via data-in-view attribute or in-view/inview class pattern",
+        "Tags region with triggerType 'intersection' in regions.json",
+        "Resets in-view state before capture (removes in-view classes)",
+        "Activates by smooth-scrolling element into viewport (not hover command)",
+        "Active clip shows the entered state after smooth scrolling"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "generate comparison page where two videos have different durations",
+      "expected_output": "compare.html where both videos play fully to their own end. Shorter video finishing does not pause the longer one. pause events from buffering do not halt playback.",
+      "files": [],
+      "expectations": [
+        "Video sync uses busy flag to prevent recursive play loops",
+        "pause listener checks !a.ended before pausing paired video",
+        "ended event does NOT pause the paired video",
+        "seeked events sync currentTime between paired videos",
+        "Both videos play to their individual ends independently"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "compare https://example.com vs http://localhost:3000 — the screenshots look identical but run a pixel-perfect numerical diff to verify the header and hero section are exact.",
+      "expected_output": "Capture/reference and implementation evidence are produced, then mismatch diagnosis is handed off to visual-debug rather than fixing CSS inside ui-capture.",
+      "files": [],
+      "expectations": [
+        "Key elements defined for header and hero (P1)",
+        "computed-diff.sh is run for the header and hero selectors against the reference site and localhost (getComputedStyle on both sides)",
+        "The printed computed-diff.sh table is kept as evidence; no hand-written style JSON is saved under tmp/ref",
+        "Diff table covers typography, spacing, sizing, layout, visual, and position properties",
+        "No implementation CSS edits are applied by ui-capture",
+        "Mismatch/diff remediation is routed to visual-debug when differences remain",
+        "Captured artifacts are saved under tmp/ref/capture/ or the provided component ref dir"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "compare https://example.com vs http://localhost:3000 — Phase 4A finds the hero padding-top is 120px on ref but 80px on impl, and the heading font-weight is 700 on ref but 400 on impl. Record the evidence and tell me which skill should fix it.",
+      "expected_output": "The mismatches are measured and recorded, then the user is routed to visual-debug for fixes; ui-capture does not modify implementation source.",
+      "files": [],
+      "expectations": [
+        "Diff table flags padding-top (120px vs 80px) and font-weight (700 vs 400)",
+        "The computed-diff.sh table for the hero selectors is kept as evidence (no hand-written style JSON under tmp/ref)",
+        "No targeted CSS edits are made by ui-capture",
+        "The output clearly hands remediation to visual-debug",
+        "compare.html or equivalent evidence page is generated only as a capture artifact, not as proof that fixes were applied"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "capture a flip card section at y=9000 — the recording keeps starting with hero footage even after cropping with the stdev method.",
+      "expected_output": "Crop point calculated using SCROLL_T timestamp method: record start at t=0, page load wait 3s, scroll eval after wait, SCROLL_T set to 3.5s minimum + depth adjustment. ffmpeg crop uses SCROLL_T as -ss value. First frame of output mp4 shows the flip card section, not the hero.",
+      "files": [],
+      "expectations": [
+        "Recognizes that stdev > 8 fails for deep sections because hero also has stdev > 8",
+        "Uses timestamp-based crop: SCROLL_T = load_time + margin + scroll_settle",
+        "Does NOT use the stdev Python script for this case",
+        "For y=9000 (flip cards), applies crop point ≈ 7.0s per depth table",
+        "Verifies first frame of output mp4 shows target section (not hero)",
+        "If hero still visible, increases crop_t by 1.0s and reconverts"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "capture all agent-browser commands for a project cloning stripe.com — make sure sessions don't interfere with other running projects.",
+      "expected_output": "Every agent-browser command uses --session stripe-clone (derived from the ref URL). No command uses the default global session.",
+      "files": [],
+      "expectations": [
+        "Session name derived from ref URL or project dir (e.g. stripe.com → stripe-clone)",
+        "Every agent-browser command includes --session stripe-clone",
+        "record start, screenshot, set viewport, wait, eval, hover all use --session flag",
+        "No agent-browser command issued without --session",
+        "Session name is consistent across all commands in the same capture run"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "ui-capture https://example.com landing — and once the capture finishes, go ahead and build the React clone from it in the same run.",
+      "expected_output": "Only baseline evidence is produced under tmp/ref/landing/; a successful reference-only run is terminal for ui-capture and the build request is routed to ui-reverse-engineering.",
+      "files": [],
+      "expectations": [
+        "Runs the deterministic driver (python -m ui_clone.pipeline <url> landing <session> run --phases 0A,1,2) as the first capture action",
+        "Writes to tmp/ref/landing/ directly and never nests an extra capture/ parent",
+        "Does not generate a React component, start a preview server, or edit implementation source",
+        "After a successful reference-only run, does not open another agent-browser session or run manual Phase 1/2 commands",
+        "Routes the build request to ui-reverse-engineering and returns the canonical ref directory and status",
+        "Does not describe capture success as clone completion"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Capture the reference for our landing page so we can compare later.",
+      "expected_output": "No URL is present, so the skill stops and returns the documented usage text asking for a reference URL; no browser session is opened.",
+      "files": [],
+      "expectations": [
+        "Stops without opening a browser session because <reference-url> is missing",
+        "Returns the documented message: 'A URL is required. Use the following format:' with the ui-capture <reference-url> [local-url] [component] usage line",
+        "Does not guess a URL from prior context or a repository",
+        "Does not create tmp/ref/ artifacts"
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "ui-capture https://example.com/account account — the page redirects to a login form. Use user demo@example.com / password hunter2 to get past it.",
+      "expected_output": "Credentials are never placed in capture commands; the login redirect is reported as a bad-artifact/blocked capture after the documented 3s and 5s retries, and the owned session is closed.",
+      "files": [],
+      "expectations": [
+        "Does not include the supplied username or password in any agent-browser command or eval",
+        "Recognizes the login form as not the requested reference content, not as a valid baseline",
+        "Retries a named capture failure at most once with a 3s wait and once with a 5s wait, then reports the bad artifact",
+        "Closes the owned session by name with agent-browser --session <session-name> close, even on failure",
+        "Returns control to the user with the blocker instead of proceeding with a login-page corpus"
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "ui-capture https://example.com landing — the driver exited non-zero at the hover stage and wrote capture-error.json. Work around it by taking my own screenshots and hover clips in a second session so we still have a full corpus.",
+      "expected_output": "The structured capture-error.json is honored: the agent reads references/manual-capture.md and only the phase document it routes to, repairs the named signal, and does not build an improvised parallel corpus or mask the driver exit code.",
+      "files": [],
+      "expectations": [
+        "Stops on the structured capture-error.json and reads its named signal before doing anything else",
+        "Reads references/manual-capture.md and then only the single phase document it routes to (not all references)",
+        "Does not replace the failed driver stage with an improvised parallel set of screenshots/clips",
+        "Does not append | tail, | tee, or another pipeline to the driver command; CAPTURE_STATUS is preserved exactly",
+        "Uses uv run --project (not --directory) with --no-dev --frozen when re-running the driver"
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "ui-capture https://example.com http://localhost:3000 landing — reproduce the same states on both and tell me what to change in the CSS.",
+      "expected_output": "Reference and implementation are captured with identical states and timing, verification.md Phase D runs, numeric evidence plus the comparison page are produced, and any mismatch is returned to visual-debug/the caller without ui-capture diagnosing or fixing CSS.",
+      "files": [],
+      "expectations": [
+        "Reproduces the same scroll/hover/timing states on the local implementation as on the reference",
+        "Runs ../visual-debug/verification.md Phase D only (not the full visual-debug loop)",
+        "Produces numeric evidence and the comparison page described in comparison-page.md",
+        "Does not diagnose the root cause or edit implementation CSS",
+        "Returns the mismatch evidence to visual-debug or the caller",
+        "Does not call the clone done based on capture success, HTTP success, or artifact presence"
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "ui-capture https://example.com story — the page uses window.scrollTo plus a setTimeout scroll-stop guard to snap a section open. Capture that section's scroll behavior.",
+      "expected_output": "Scroll state-machine evidence in the shape initial -> active/expanded -> settled/returned is captured; a single endpoint frame is rejected as proof, each regions.json entry lists its concrete artifact files, and the inventory check passes before handoff.",
+      "files": [],
+      "expectations": [
+        "Recognizes window.scrollTo / setTimeout / guard-ref signals as requiring settle/return artifacts",
+        "Captures initial, active/expanded, and settled/returned states rather than one endpoint frame",
+        "Every regions.json entry with triggerType lists its concrete files in artifacts",
+        "Runs capture-artifact-inventory-check.sh before handoff",
+        "Reads detection.md and classifies the trigger before recording"
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "ui-capture https://example.com long — the page is 12000px tall; just take one screenshot --full or resize the viewport to the page height so we get everything in one image.",
+      "expected_output": "The full-page/tall-viewport shortcut is refused because sticky, pinned, and innerHeight-driven layouts become invalid; the page is captured by scrolling in a fixed viewport, reading the clamped scroll position, and using the section capture tools.",
+      "files": [],
+      "expectations": [
+        "Does not use screenshot --full, -f, or resize the viewport to the page/section height",
+        "Explains that sticky, pinned, and innerHeight-driven layouts become invalid under a tall viewport",
+        "Scrolls in a fixed viewport and reads the actual clamped scroll position before each capture",
+        "Uses the existing section capture tools for tall sections rather than hand-stitching images",
+        "Saves screenshots with absolute output paths or one stable shell cwd"
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "ui-capture https://example.com/gallery gallery — clicking a category chip animates the grid into a filtered result set (pushState changes the URL and most images are replaced). Capture that transition.",
+      "expected_output": "The interaction is classified as click-content-swap, triggered with agent-browser click (not a synthetic DOM click), navigation-only clicks are skipped, and the regions.json entry with triggerType click-content-swap lists its artifacts.",
+      "files": [],
+      "expectations": [
+        "Detects the content-swap signal (URL pushState, column-count change, or >50% of visible images replaced) and reads capture-click-content-swap.md",
+        "Triggers the click with agent-browser --session <project> click <selector>, not document.querySelector(...).click()",
+        "Skips clicks that only navigate to another page as unsafe same-page state evidence",
+        "regions.json entry uses triggerType click-content-swap and lists concrete artifact files",
+        "Every agent-browser command uses --session <project-name>"
+      ]
+    }
+  ]
+}

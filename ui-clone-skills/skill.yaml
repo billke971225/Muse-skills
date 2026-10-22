@@ -1,0 +1,7 @@
+name: ui_clone_skills
+title: UI Clone Skills
+description: 把一个真实网站（尤其带 GSAP / Framer Motion / Webflow / Lenis / Lottie 动效的）复刻成 React + Tailwind 实现：先抓证据、再解码动效参数、最后逐屏验证。用户说“复刻这个网站”“把动效扒下来”“照着录像做个一样的效果”时用。
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false
