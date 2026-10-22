@@ -1,0 +1,7 @@
+name: last30days_cn
+title: Last30Days CN — Chinese Social Listening
+description: 中文平台舆情检索 / 国内在聊什么。检索小红书、微博、B站、抖音、微信公众号过去 30 天的真实讨论，带发布时间、作者、互动数与原链接。适用于：话题舆情、国内讨论、网友怎么看、平台风向、产品口碑、热点追踪、中文内容调研。Chinese social-platform research for the last 30 days (Xiaohongshu, Weibo, Bilibili, Douyin, WeChat). 无真实数据路径的源会被跳过而非退化成搜索引擎兜底。输出 Markdown / JSON / compact / 独立 HTML 报告。
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

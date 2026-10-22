@@ -1,0 +1,7 @@
+name: jev_decision
+title: Jev Decision Gate
+description: 'Ask Jev (TypeSafe''s System One decision model) for a fast, typed judgment: pick one of a defined set (choice), yes/no probability (noul), or a graded score. Use when facing a genuine multi-option decision where a cheap calibrated judgment beats another round of reasoning — e.g. which skill fits an ambiguous request, triage/urgency of a message, whether to escalate to the user. Never for writing text, code, or explanations.'
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

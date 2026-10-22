@@ -1,0 +1,7 @@
+name: ad_creative_intel
+title: Ad Creative Intel
+description: 拆解竞品广告库（Facebook Ad Library）的投放策略：识别爆款创意格式、文案结构、测试方法论，输出可复刻的创意简报。Break down competitor ads from the Facebook Ad Library — creative formats, copy structure, testing methodology — into a ready-to-use creative brief.
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

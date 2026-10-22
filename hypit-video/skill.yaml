@@ -1,0 +1,7 @@
+name: hypit_video
+title: Hypit Video Production
+description: Direct and produce videos with Hypit, primarily through generated media and authored components while incorporating briefs, references or supplied material; includes SVML/SVS/SVRun authoring and Runtime or credential setup.
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

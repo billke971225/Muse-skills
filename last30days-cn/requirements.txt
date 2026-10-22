@@ -1,0 +1,9 @@
+# 无第三方运行时依赖（纯标准库，Python 3.9+）。
+#
+# 可选增强：
+#   pip install playwright && python -m playwright install chromium
+#     启用浏览器爬虫模式，可让知乎等无 TikHub 路径的源恢复可用
+#   pip install jieba
+#     更好的中文分词；不装则退回 CJK bigram
+#   pip install pytest
+#     跑 tests/ 里继承自上游的测试（本包新增的两个测试直接 python3 跑即可）

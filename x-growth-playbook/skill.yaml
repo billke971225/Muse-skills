@@ -1,0 +1,7 @@
+name: x_growth_playbook
+title: X Growth Playbook
+description: 'Run an X/Twitter account growth operation end-to-end: account setup (avatar, bio, persona), English voice guide, daily content cadence (originals + replies + news quotes), quality gate (Jev), and publish pipeline. Use when the user asks to grow an X account, set up a new X account, or run daily X operations. English-first; adapted from a proven Chinese account playbook.'
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

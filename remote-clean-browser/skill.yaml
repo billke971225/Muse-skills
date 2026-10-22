@@ -1,0 +1,7 @@
+name: remote_clean_browser
+title: Remote Clean Browser
+description: 在沙箱 VM 上搭建一次性干净 IP 远程浏览器：Xvnc 虚拟桌面 + noVNC + 官方 Firefox（强制走干净代理）+ pinggy 临时公网隧道，让用户亲手完成 Google / ChatGPT 等对 IP 和浏览器指纹敏感的账号登录。登录态留在持久化 profile 里，隧道用完即拆。
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

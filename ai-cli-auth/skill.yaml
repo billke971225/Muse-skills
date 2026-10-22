@@ -1,0 +1,8 @@
+name: ai_cli_auth
+title: AI CLI Auth & Routing
+description: 为 Codex、Pi、Antigravity 三条本地 AI 引擎选择正确的登录与网络路由，并在诊断登录问题前先验证真实状态。Pick the correct login flow and network route for local AI CLIs (Codex / Pi / Antigravity), and verify real state before diagnosing login problems.
+category: Learning and customization
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false
