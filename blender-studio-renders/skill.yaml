@@ -1,0 +1,8 @@
+name: blender_studio_renders
+title: Blender Studio Renders
+description: Produce studio-grade product renders with Blender Python (bpy) for single-product DTC pages — a three-point area-light rig plus overhead softbox, seamless white sweep with real contact shadows, optional depth of field, per-colorway material variants, and a scripted shot list for batch multi-angle output. Includes the proven GPU-less/headless workflow for Linux VMs: why Eevee fails without an EGL context, and the Cycles CPU settings (40–48 samples + OpenImageDenoise) that replace it.
+category: Creative production
+include_in_prompt: true
+availability:
+  confidential_vm: true
+  needs_speech: false

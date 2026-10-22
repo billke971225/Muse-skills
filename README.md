@@ -27,6 +27,7 @@ Skills are shared between Muse instances: one instance writes and hardens a skil
 | [ui-clone-skills](ui-clone-skills/) | Clone a real website — especially GSAP / Framer Motion / Webflow / Lenis / Lottie animation — into a React + Tailwind implementation: capture evidence first, decode the motion parameters, verify screen by screen | Vendored from the upstream Apache-2.0 project (see its `LICENSE.txt`), used for product-grade site replicas |
 | [ad-creative-intel](ad-creative-intel/) | Break down competitor ads from the Facebook Ad Library — creative formats, copy structure, testing methodology — into a ready-to-use creative brief | Used in live ad-creative research for UGC campaigns |
 | [hypit-video](hypit-video/) | Direct and produce videos with Hypit: generated media + authored components, SVML/SVS/SVRun authoring, runtime and credential setup | The production playbook behind an ongoing AI-video pipeline |
+| [blender-studio-renders](blender-studio-renders/) | Studio-grade product renders with Blender Python: three-point + softbox lighting, seamless white sweep, scripted multi-angle shot lists and color variants — including the GPU-less Cycles CPU workflow for headless VMs | Rendered the 10 studio shots used as product-page hero images for a single-product DTC site replica |
 
 ## Install
 
